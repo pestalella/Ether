@@ -160,24 +160,20 @@ void simulationStep()
 	static const double mu_0 = 1.25663706127E-6;  // Vacuum permeability
 	static const double c = 299792458;  // speed of light
 
-	static const double mE = c*timeStepLenInSeconds;///epsilon_0;
-	static const double mH = c*timeStepLenInSeconds;///mu_0;
-	std::vector<double> newEy(FIELD_DEPTH, 0);
-	std::vector<double> newHx(FIELD_DEPTH, 0);
+	static const double mE = c*timeStepLenInSeconds;
+	static const double mH = c*timeStepLenInSeconds;
 
 	// Update H from E (Dirichlet Boundary Conditions)
 	for (unsigned int i = 0; i < FIELD_DEPTH - 1; ++i) {
-		newHx[i] = Hx[i] + mH*(Ey[i+1] - Ey[i])/gridCellWidth;
+		Hx[i] = Hx[i] + mH*(Ey[i+1] - Ey[i])/gridCellWidth;
 	}
-	newHx[FIELD_DEPTH-1] = Hx[FIELD_DEPTH-1] + mH*(0 - Ey[FIELD_DEPTH-1])/gridCellWidth;
+	Hx[FIELD_DEPTH-1] = Hx[FIELD_DEPTH-1] + mH*(0 - Ey[FIELD_DEPTH-1])/gridCellWidth;
 
 	// Update H from E (Dirichlet Boundary Conditions)
-	newEy[0] = Ey[0] + mE*(Hx[0] - 0)/gridCellWidth;
+	Ey[0] = Ey[0] + mE*(Hx[0] - 0)/gridCellWidth;
 	for (unsigned int i = 1; i < FIELD_DEPTH - 1; ++i) {
-		newEy[i] = Ey[i] + mE*(newHx[i] - newHx[i-1])/gridCellWidth;
+		Ey[i] = Ey[i] + mE*(Hx[i] - Hx[i-1])/gridCellWidth;
 	}
-	Hx.swap(newHx);
-	Ey.swap(newEy);
 }
 
 void idleCB()
