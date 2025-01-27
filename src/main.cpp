@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <vector>
+#include <cmath>
 #include <unistd.h>
 
 GLsizei screenWidth = 1024;
@@ -11,7 +12,7 @@ GLsizei screenHeight = 1024;
 
 const unsigned int FIELD_WIDTH = 100;
 const unsigned int FIELD_HEIGHT = 100;
-const unsigned int FIELD_DEPTH = 1000;
+const unsigned int FIELD_DEPTH = 200;
 
 GLuint textureID;
 
@@ -125,40 +126,71 @@ void reshapeCB(int width, int height)
     setUpCamera();
 }
 
-std::vector<double> Ex(FIELD_WIDTH*FIELD_HEIGHT, 0);
-std::vector<double> Ey(FIELD_WIDTH*FIELD_HEIGHT, 0);
-std::vector<double> Ez(FIELD_WIDTH*FIELD_HEIGHT, 0);
-std::vector<double> Hx(FIELD_WIDTH*FIELD_HEIGHT, 0);
-std::vector<double> Hy(FIELD_WIDTH*FIELD_HEIGHT, 0);
-std::vector<double> Hz(FIELD_WIDTH*FIELD_HEIGHT, 0);
+std::vector<double> Ex(FIELD_DEPTH, 0);
+std::vector<double> Ey(FIELD_DEPTH, 0);
+std::vector<double> Ez(FIELD_DEPTH, 0);
+std::vector<double> Hx(FIELD_DEPTH, 0);
+std::vector<double> Hy(FIELD_DEPTH, 0);
+std::vector<double> Hz(FIELD_DEPTH, 0);
+
+const double gridCellWidth = 1E-3; // 1 millimeter
+const double timeStepLenInSeconds = 1E-12;  // 1 picosecond
+const unsigned int SOURCE_STEPS = 10000;
+std::vector<double> gaussianSource(SOURCE_STEPS, 0);
+
+void precomputeSources()
+{
+	double tau = timeStepLenInSeconds * 20;
+	for (unsigned int i = 0; i < SOURCE_STEPS; ++i) {
+		double t = (double)i*timeStepLenInSeconds;
+		double x = (t - 6*tau)/tau;
+		gaussianSource[i] = std::exp(-(x*x));
+	}
+}
+
+void injectSource(unsigned int timeStep)
+{
+	Ey[FIELD_DEPTH/2] += gaussianSource[timeStep % SOURCE_STEPS];
+	Hx[FIELD_DEPTH/2] += gaussianSource[timeStep % SOURCE_STEPS];
+}
 
 void simulationStep()
 {
-	const double timeStepLenInSeconds = 1E-12;  // 1 picosecond
-	static int timeStep = 0;
-
 	static const double epsilon_0 = 8.8541878188E-12; // Vacuum permitivity
 	static const double mu_0 = 1.25663706127E-6;  // Vacuum permeability
 	static const double c = 299792458;  // speed of light
 
-	static const double mE = c*timeStepLenInSeconds/epsilon_0;
-	static const double mH = c*timeStepLenInSeconds/mu_0;
-
-	std::cout << "Time step " << timeStep << std::endl;
+	static const double mE = c*timeStepLenInSeconds;///epsilon_0;
+	static const double mH = c*timeStepLenInSeconds;///mu_0;
+	std::vector<double> newEy(FIELD_DEPTH, 0);
+	std::vector<double> newHx(FIELD_DEPTH, 0);
 
 	// Update H from E (Dirichlet Boundary Conditions)
 	for (unsigned int i = 0; i < FIELD_DEPTH - 1; ++i) {
-		Hx[i] += mH*Hx[i]*(Ey[i+1] - Ey[i]);
+		newHx[i] = Hx[i] + mH*(Ey[i+1] - Ey[i])/gridCellWidth;
 	}
-	Hx[FIELD_DEPTH-1] += mH*Hx[FIELD_DEPTH-1]*(0 - Ey[FIELD_DEPTH-1]);
+	newHx[FIELD_DEPTH-1] = Hx[FIELD_DEPTH-1] + mH*(0 - Ey[FIELD_DEPTH-1])/gridCellWidth;
 
 	// Update H from E (Dirichlet Boundary Conditions)
-	Ey[0] += mE*Ey[0]*(Hx[0] - 0);
+	newEy[0] = Ey[0] + mE*(Hx[0] - 0)/gridCellWidth;
 	for (unsigned int i = 1; i < FIELD_DEPTH - 1; ++i) {
-		Ey[i] += mE*Ey[i]*(Hx[i] - Hx[i-1]);
+		newEy[i] = Ey[i] + mE*(newHx[i] - newHx[i-1])/gridCellWidth;
 	}
-	usleep(100000);
+	Hx.swap(newHx);
+	Ey.swap(newEy);
+}
+
+void idleCB()
+{
+	static int timeStep = 0;
+	std::cout << "Time step " << timeStep << std::endl;
+
+	injectSource(timeStep);
+	simulationStep();
+	glutPostRedisplay();
+	usleep(50000);
 	timeStep += 1;
+
 }
 
 void displayCB()
@@ -166,24 +198,27 @@ void displayCB()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glDisable(GL_TEXTURE_2D);
 
+	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
+	glScalef(1.0, 0.2, 1.0);
+
 	glTranslatef(0.0f, 0.0f, 0.0f);
 
-	glBindTexture(GL_TEXTURE_2D, textureID);
 	// Render electric field in red
 	glColor3f(1.0, 0, 0);
 	glBegin(GL_LINE_STRIP);
 	for (unsigned int i = 0; i < FIELD_DEPTH; ++i) {
 		glVertex3f(((float)i/FIELD_DEPTH)*1.9 - 0.95, Ey[i], 0);
+//		glVertex3f(((float)i/FIELD_DEPTH)*1.9 - 0.95, std::sin(i*3.1415*6/FIELD_DEPTH), 0);
 	}
 	glEnd();
 	// Render magnetic field in blue
-	// glColor3f(0, 0, 1.0);
-	// glBegin(GL_LINE_STRIP);
-	// for (unsigned int i = 0; i < FIELD_DEPTH; ++i) {
-	// 	glVertex3f(((float)i/FIELD_DEPTH)*1.9 - 0.95, Hx[i], 0);
-	// }
-	// glEnd();
+	glColor3f(0, 0, 1.0);
+	glBegin(GL_LINE_STRIP);
+	for (unsigned int i = 0; i < FIELD_DEPTH; ++i) {
+		glVertex3f(((float)i/FIELD_DEPTH)*1.9 - 0.95, Hx[i], 0);
+	}
+	glEnd();
 	glutSwapBuffers();
 }
 
@@ -204,7 +239,7 @@ int initGLUT(int argc, char **argv)
 
     // register GLUT callback functions
     glutDisplayFunc(displayCB);
-    glutIdleFunc(simulationStep);
+    glutIdleFunc(idleCB);
     glutReshapeFunc(reshapeCB);
     glutKeyboardFunc(keyboardCB);
     // glutMouseFunc(mouseCB);
@@ -239,10 +274,10 @@ int main(int argc, char **argv)
 
     setUp(argc, argv);
 
-	std::vector<float> imgBuf(1024*1024*3);
-	initBuffer(imgBuf);
-	loadTexture(&imgBuf[0]);
-	simulationStep();
+	// std::vector<float> imgBuf(1024*1024*3);
+	// initBuffer(imgBuf);
+	// loadTexture(&imgBuf[0]);
+	precomputeSources();
     glutMainLoop();
     return 0;
 }
