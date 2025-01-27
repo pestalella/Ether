@@ -4,12 +4,14 @@
 
 #include <iostream>
 #include <vector>
+#include <unistd.h>
 
 GLsizei screenWidth = 1024;
 GLsizei screenHeight = 1024;
 
-const unsigned int IMAGE_WIDTH = 1024;
-const unsigned int IMAGE_HEIGHT = 1024;
+const unsigned int FIELD_WIDTH = 100;
+const unsigned int FIELD_HEIGHT = 100;
+const unsigned int FIELD_DEPTH = 1000;
 
 GLuint textureID;
 
@@ -71,32 +73,13 @@ void loadTexture(const float *buffer)
 		GL_TEXTURE_2D,
 		0,
 		GL_RGB,
-		IMAGE_WIDTH,
-		IMAGE_HEIGHT,
+		FIELD_WIDTH,
+		FIELD_HEIGHT,
 		0,
 		GL_RGB,
 		GL_FLOAT,
 		buffer //unsigned char* described up there
 	);
-}
-
-void displayCB()
-{
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glLoadIdentity();
-	glTranslatef(0.0f, 0.0f, 0.0f);
-
-	glBindTexture(GL_TEXTURE_2D, textureID);
-
-	glBegin(GL_QUADS);
-
-	glTexCoord2i(0,0); glVertex3f(-0.9f, -0.9f, 0);
-	glTexCoord2i(0,1); glVertex3f(0.9f, -0.9f, 0);
-	glTexCoord2i(1,1); glVertex3f(0.9f, 0.9f, 0);
-	glTexCoord2i(1,0); glVertex3f(-0.9f, 0.9f, 0);
-
-	glEnd();
-	glutSwapBuffers();
 }
 
 void keyboardCB(unsigned char key, int, int)
@@ -142,6 +125,68 @@ void reshapeCB(int width, int height)
     setUpCamera();
 }
 
+std::vector<double> Ex(FIELD_WIDTH*FIELD_HEIGHT, 0);
+std::vector<double> Ey(FIELD_WIDTH*FIELD_HEIGHT, 0);
+std::vector<double> Ez(FIELD_WIDTH*FIELD_HEIGHT, 0);
+std::vector<double> Hx(FIELD_WIDTH*FIELD_HEIGHT, 0);
+std::vector<double> Hy(FIELD_WIDTH*FIELD_HEIGHT, 0);
+std::vector<double> Hz(FIELD_WIDTH*FIELD_HEIGHT, 0);
+
+void simulationStep()
+{
+	const double timeStepLenInSeconds = 1E-12;  // 1 picosecond
+	static int timeStep = 0;
+
+	static const double epsilon_0 = 8.8541878188E-12; // Vacuum permitivity
+	static const double mu_0 = 1.25663706127E-6;  // Vacuum permeability
+	static const double c = 299792458;  // speed of light
+
+	static const double mE = c*timeStepLenInSeconds/epsilon_0;
+	static const double mH = c*timeStepLenInSeconds/mu_0;
+
+	std::cout << "Time step " << timeStep << std::endl;
+
+	// Update H from E (Dirichlet Boundary Conditions)
+	for (unsigned int i = 0; i < FIELD_DEPTH - 1; ++i) {
+		Hx[i] += mH*Hx[i]*(Ey[i+1] - Ey[i]);
+	}
+	Hx[FIELD_DEPTH-1] += mH*Hx[FIELD_DEPTH-1]*(0 - Ey[FIELD_DEPTH-1]);
+
+	// Update H from E (Dirichlet Boundary Conditions)
+	Ey[0] += mE*Ey[0]*(Hx[0] - 0);
+	for (unsigned int i = 1; i < FIELD_DEPTH - 1; ++i) {
+		Ey[i] += mE*Ey[i]*(Hx[i] - Hx[i-1]);
+	}
+	usleep(100000);
+	timeStep += 1;
+}
+
+void displayCB()
+{
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glDisable(GL_TEXTURE_2D);
+
+	glLoadIdentity();
+	glTranslatef(0.0f, 0.0f, 0.0f);
+
+	glBindTexture(GL_TEXTURE_2D, textureID);
+	// Render electric field in red
+	glColor3f(1.0, 0, 0);
+	glBegin(GL_LINE_STRIP);
+	for (unsigned int i = 0; i < FIELD_DEPTH; ++i) {
+		glVertex3f(((float)i/FIELD_DEPTH)*1.9 - 0.95, Ey[i], 0);
+	}
+	glEnd();
+	// Render magnetic field in blue
+	// glColor3f(0, 0, 1.0);
+	// glBegin(GL_LINE_STRIP);
+	// for (unsigned int i = 0; i < FIELD_DEPTH; ++i) {
+	// 	glVertex3f(((float)i/FIELD_DEPTH)*1.9 - 0.95, Hx[i], 0);
+	// }
+	// glEnd();
+	glutSwapBuffers();
+}
+
 /**
  * initialize GLUT for windowing
  **/
@@ -159,7 +204,7 @@ int initGLUT(int argc, char **argv)
 
     // register GLUT callback functions
     glutDisplayFunc(displayCB);
-//    glutIdleFunc(updatePopulation);
+    glutIdleFunc(simulationStep);
     glutReshapeFunc(reshapeCB);
     glutKeyboardFunc(keyboardCB);
     // glutMouseFunc(mouseCB);
@@ -178,11 +223,11 @@ void setUp(int argc, char **argv)
 
 void initBuffer(std::vector<float> &buf)
 {
-	for (unsigned int i = 0; i < IMAGE_HEIGHT; ++i) {
-		for (unsigned int j = 0; j < IMAGE_WIDTH; ++j) {
-			buf[3*(IMAGE_WIDTH*i + j) + 0] = (sin(j / 1024.0 * 2 * M_PI*5) + 1.0)*0.5;
-			buf[3*(IMAGE_WIDTH*i + j) + 1] = (sin(i / 1024.0 * 2 * M_PI*6) + 1.0)*0.5;
-			buf[3*(IMAGE_WIDTH*i + j) + 2] = 0;
+	for (unsigned int i = 0; i < FIELD_HEIGHT; ++i) {
+		for (unsigned int j = 0; j < FIELD_WIDTH; ++j) {
+			buf[3*(FIELD_WIDTH*i + j) + 0] = (sin(j / 1024.0 * 2 * M_PI*5) + 1.0)*0.5;
+			buf[3*(FIELD_WIDTH*i + j) + 1] = (sin(i / 1024.0 * 2 * M_PI*6) + 1.0)*0.5;
+			buf[3*(FIELD_WIDTH*i + j) + 2] = 0;
 
 		}
 	}
@@ -197,7 +242,7 @@ int main(int argc, char **argv)
 	std::vector<float> imgBuf(1024*1024*3);
 	initBuffer(imgBuf);
 	loadTexture(&imgBuf[0]);
-
+	simulationStep();
     glutMainLoop();
     return 0;
 }
