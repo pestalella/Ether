@@ -25,7 +25,7 @@ debug: prepare $(DBG_BINARY)
 REL_CXXFLAGS += -Wall -W -O2
 REL_LDFLAGS =
 REL_OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(REL_OBJDIR)/%.o,$(SRC_FILES))
-REL_BINARY = $(REL_OBJDIR)/lw
+REL_BINARY = $(REL_OBJDIR)/$(BINARY_NAME)
 release: prepare $(REL_BINARY)
 
 $(DBG_OBJDIR)/%.o: %.cpp | $(DBG_OBJDIR)

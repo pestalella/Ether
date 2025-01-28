@@ -12,7 +12,7 @@ GLsizei screenHeight = 1024;
 
 const unsigned int FIELD_WIDTH = 100;
 const unsigned int FIELD_HEIGHT = 100;
-const unsigned int FIELD_DEPTH = 200;
+const unsigned int FIELD_DEPTH = 300;
 
 GLuint textureID;
 
@@ -86,36 +86,10 @@ void loadTexture(const float *buffer)
 void keyboardCB(unsigned char key, int, int)
 {
     switch (key) {
-        case '1':
+        case 'q':
+		case 27:  // ESC key
+			exit(0);
             break;
-        case '2':
-            break;
-        case 'a':
-        case 'A':
-            // opticSystem.moveLensElement(selectedLens, -0.1);
-            // updateLightRays();
-            // glutPostRedisplay();
-            break;
-        case 'd':
-        case 'D':
-            // opticSystem.moveLensElement(selectedLens, 0.1);
-            // updateLightRays();
-            // glutPostRedisplay();
-            break;
-        case 'g':
-        case 'G':
-            // changeLensWidth(selectedLens, -0.1);
-            // updateLightRays();
-            // glutPostRedisplay();
-            break;
-        case 'h':
-        case 'H':
-            // changeLensWidth(selectedLens, +0.1);
-            // updateLightRays();
-            // glutPostRedisplay();
-            break;
-        default:
-            std::cout << "Pressed key code: " << int(key) << std::endl;
     }
 }
 
@@ -134,16 +108,16 @@ std::vector<double> Hy(FIELD_DEPTH, 0);
 std::vector<double> Hz(FIELD_DEPTH, 0);
 
 const double gridCellWidth = 1E-3; // 1 millimeter
-const double timeStepLenInSeconds = 1E-12;  // 1 picosecond
+const double timeStepLenInSeconds = 2E-12;  // 1 picosecond
 const unsigned int SOURCE_STEPS = 10000;
 std::vector<double> gaussianSource(SOURCE_STEPS, 0);
 
 void precomputeSources()
 {
-	double tau = timeStepLenInSeconds * 20;
+	double tau = timeStepLenInSeconds * 40;
 	for (unsigned int i = 0; i < SOURCE_STEPS; ++i) {
 		double t = (double)i*timeStepLenInSeconds;
-		double x = (t - 6*tau)/tau;
+		double x = (t - 7*tau)/tau;
 		gaussianSource[i] = std::exp(-(x*x));
 	}
 }
@@ -151,40 +125,73 @@ void precomputeSources()
 void injectSource(unsigned int timeStep)
 {
 	Ey[FIELD_DEPTH/2] += gaussianSource[timeStep % SOURCE_STEPS];
-	Hx[FIELD_DEPTH/2] += gaussianSource[timeStep % SOURCE_STEPS];
+	//Hx[FIELD_DEPTH/2] += gaussianSource[timeStep % SOURCE_STEPS];
 }
 
-void simulationStep()
+void simulationStepPerfectReflectionBoundary()
 {
 	static const double epsilon_0 = 8.8541878188E-12; // Vacuum permitivity
 	static const double mu_0 = 1.25663706127E-6;  // Vacuum permeability
 	static const double c = 299792458;  // speed of light
 
-	static const double mE = c*timeStepLenInSeconds;
-	static const double mH = c*timeStepLenInSeconds;
+	static const double mE = c*timeStepLenInSeconds/gridCellWidth;
+	static const double mH = c*timeStepLenInSeconds/gridCellWidth;
 
 	// Update H from E (Dirichlet Boundary Conditions)
 	for (unsigned int i = 0; i < FIELD_DEPTH - 1; ++i) {
-		Hx[i] = Hx[i] + mH*(Ey[i+1] - Ey[i])/gridCellWidth;
+		Hx[i] = Hx[i] + mH*(Ey[i+1] - Ey[i]);
 	}
-	Hx[FIELD_DEPTH-1] = Hx[FIELD_DEPTH-1] + mH*(0 - Ey[FIELD_DEPTH-1])/gridCellWidth;
+	Hx[FIELD_DEPTH-1] = Hx[FIELD_DEPTH-1] + mH*(0 - Ey[FIELD_DEPTH-1]);
 
 	// Update H from E (Dirichlet Boundary Conditions)
-	Ey[0] = Ey[0] + mE*(Hx[0] - 0)/gridCellWidth;
+	Ey[0] = Ey[0] + mE*(Hx[0] - 0);
 	for (unsigned int i = 1; i < FIELD_DEPTH - 1; ++i) {
-		Ey[i] = Ey[i] + mE*(Hx[i] - Hx[i-1])/gridCellWidth;
+		Ey[i] = Ey[i] + mE*(Hx[i] - Hx[i-1]);
+	}
+}
+
+
+void simulationStepPerfectAbsortionBoundary()
+{
+	static const double epsilon_0 = 8.8541878188E-12; // Vacuum permitivity
+	static const double mu_0 = 1.25663706127E-6;  // Vacuum permeability
+	static const double c = 299792458;  // speed of light
+
+	static const double mE = c*timeStepLenInSeconds/gridCellWidth;
+	static const double mH = c*timeStepLenInSeconds/gridCellWidth;
+
+	static double E0 = 0;
+	static double E1 = 0;
+	static double E2 = 0;
+	static double H0 = 0;
+	static double H1 = 0;
+	static double H2 = 0;
+
+	// Update H from E (Dirichlet Boundary Conditions)
+	for (unsigned int i = 0; i < FIELD_DEPTH - 1; ++i) {
+		Hx[i] = Hx[i] + mH*(Ey[i+1] - Ey[i]);
+	}
+	E2 = E1; E1 = E0; E0 = Ey[FIELD_DEPTH-1];
+	Hx[FIELD_DEPTH-1] = Hx[FIELD_DEPTH-1] + mH*(E2 - Ey[FIELD_DEPTH-1]);
+
+	// Update H from E (Dirichlet Boundary Conditions)
+	H2 = H1; H1 = H0; H0 = Hx[0];
+	Ey[0] = Ey[0] + mE*(Hx[0] - H2);
+	for (unsigned int i = 1; i < FIELD_DEPTH - 1; ++i) {
+		Ey[i] = Ey[i] + mE*(Hx[i] - Hx[i-1]);
 	}
 }
 
 void idleCB()
 {
 	static int timeStep = 0;
-	std::cout << "Time step " << timeStep << std::endl;
+	if (timeStep % 100 == 1)
+		std::cout << "Time step " << timeStep << std::endl;
 
 	injectSource(timeStep);
-	simulationStep();
+	simulationStepPerfectReflectionBoundary();
 	glutPostRedisplay();
-	usleep(50000);
+//	usleep(500);
 	timeStep += 1;
 
 }
