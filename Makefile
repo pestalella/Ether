@@ -1,9 +1,6 @@
 WRKDIR = `pwd`
 
-CXXFLAGS = -Wall -W -O2
 LIBS = -lglut -lGLU -lGL -lm
-LDFLAGS =
-
 SRC_DIR = src
 SRC_FILES = $(wildcard $(SRC_DIR)/*.cpp)
 BINARY_NAME = ether
@@ -12,17 +9,17 @@ REL_OBJDIR = release_build
 
 vpath %.cpp $(SRC_DIR)
 
-.PHONY: all release debug clean $(BINARY_NAME)
+.PHONY: all release debug clean prepare
 
 all: debug
 
-DBG_CXXFLAGS += -Wall -W -g3
+DBG_CXXFLAGS += -Wall -Werror -W -g3
 DBG_LDFLAGS += -g3
 DBG_BINARY = $(DBG_OBJDIR)/$(BINARY_NAME)
 DBG_OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(DBG_OBJDIR)/%.o,$(SRC_FILES))
 debug: prepare $(DBG_BINARY)
 
-REL_CXXFLAGS += -Wall -W -O2
+REL_CXXFLAGS += -Wall -Werror -Wextra -O3
 REL_LDFLAGS =
 REL_OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(REL_OBJDIR)/%.o,$(SRC_FILES))
 REL_BINARY = $(REL_OBJDIR)/$(BINARY_NAME)
