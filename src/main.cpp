@@ -1,20 +1,17 @@
-//#include "lens.h"
+#include "simulation.h"
 #include <glm/glm.hpp>
 #include <GL/glut.h>
 
 #include <iostream>
 #include <vector>
-#include <cmath>
 #include <unistd.h>
 
 GLsizei screenWidth = 1024;
 GLsizei screenHeight = 1024;
 
-const unsigned int FIELD_WIDTH = 100;
-const unsigned int FIELD_HEIGHT = 100;
-const unsigned int FIELD_DEPTH = 300;
-
 GLuint textureID;
+
+Simulation sim;
 
 /**
  * initialize OpenGL
@@ -29,21 +26,6 @@ void initGL()
 	glEnable(GL_TEXTURE_2D);
 	glDepthFunc((GL_LEQUAL));
 	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
-
-    // // enable /disable features
-    // glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
-    // glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
-    // glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
-    // glDisable(GL_DEPTH_TEST);
-    // glDisable(GL_LIGHTING);
-    // glEnable(GL_MULTISAMPLE);
-    // glEnable(GL_LINE_SMOOTH);
-    // glDisable(GL_CULL_FACE);
-    // glDisable(GL_NORMALIZE);
-    // glDisable(GL_COLOR_MATERIAL);
-
-    // glClearColor(0, 0, 0, 0);                   // background color
-    // glClearStencil(0);                          // clear stencil buffer
 
 	glGenTextures(1, &textureID);
 }
@@ -65,23 +47,23 @@ void setUpCamera()
     glLoadIdentity();
 }
 
-void loadTexture(const float *buffer)
-{
-	glBindTexture(GL_TEXTURE_2D, textureID);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexImage2D(
-		GL_TEXTURE_2D,
-		0,
-		GL_RGB,
-		FIELD_WIDTH,
-		FIELD_HEIGHT,
-		0,
-		GL_RGB,
-		GL_FLOAT,
-		buffer //unsigned char* described up there
-	);
-}
+// void loadTexture(const float *buffer)
+// {
+// 	glBindTexture(GL_TEXTURE_2D, textureID);
+// 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+// 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+// 	glTexImage2D(
+// 		GL_TEXTURE_2D,
+// 		0,
+// 		GL_RGB,
+// 		FIELD_WIDTH,
+// 		FIELD_HEIGHT,
+// 		0,
+// 		GL_RGB,
+// 		GL_FLOAT,
+// 		buffer //unsigned char* described up there
+// 	);
+// }
 
 void keyboardCB(unsigned char key, int, int)
 {
@@ -100,88 +82,14 @@ void reshapeCB(int width, int height)
     setUpCamera();
 }
 
-std::vector<double> Ex(FIELD_DEPTH, 0);
-std::vector<double> Ey(FIELD_DEPTH, 0);
-std::vector<double> Ez(FIELD_DEPTH, 0);
-std::vector<double> Hx(FIELD_DEPTH, 0);
-std::vector<double> Hy(FIELD_DEPTH, 0);
-std::vector<double> Hz(FIELD_DEPTH, 0);
-
-const double gridCellWidth = 1E-3; // 1 millimeter
-const double timeStepLenInSeconds = 2E-12;  // 1 picosecond
-const unsigned int SOURCE_STEPS = 10000;
-std::vector<double> gaussianSource(SOURCE_STEPS, 0);
-
-void precomputeSources()
-{
-	double tau = timeStepLenInSeconds * 40;
-	for (unsigned int i = 0; i < SOURCE_STEPS; ++i) {
-		double t = (double)i*timeStepLenInSeconds;
-		double x = (t - 7*tau)/tau;
-		gaussianSource[i] = std::exp(-(x*x));
-	}
-}
-
-void injectSource(unsigned int timeStep)
-{
-	Ey[FIELD_DEPTH/2] += gaussianSource[timeStep % SOURCE_STEPS];
-	//Hx[FIELD_DEPTH/2] += gaussianSource[timeStep % SOURCE_STEPS];
-}
-
-//	static const double epsilon_0 = 8.8541878188E-12; // Vacuum permitivity
-//	static const double mu_0 = 1.25663706127E-6;  // Vacuum permeability
-static const double c = 299792458;  // speed of light
-static const double mE = c*timeStepLenInSeconds/gridCellWidth;
-static const double mH = c*timeStepLenInSeconds/gridCellWidth;
-
-void simulationStepPerfectReflectionBoundary()
-{
-	// Update H from E (Dirichlet Boundary Conditions)
-	for (unsigned int i = 0; i < FIELD_DEPTH - 1; ++i) {
-		Hx[i] = Hx[i] + mH*(Ey[i+1] - Ey[i]);
-	}
-	Hx[FIELD_DEPTH-1] = Hx[FIELD_DEPTH-1] + mH*(0 - Ey[FIELD_DEPTH-1]);
-
-	// Update H from E (Dirichlet Boundary Conditions)
-	Ey[0] = Ey[0] + mE*(Hx[0] - 0);
-	for (unsigned int i = 1; i < FIELD_DEPTH - 1; ++i) {
-		Ey[i] = Ey[i] + mE*(Hx[i] - Hx[i-1]);
-	}
-}
-
-
-void simulationStepPerfectAbsortionBoundary()
-{
-	static double E0 = 0;
-	static double E1 = 0;
-	static double E2 = 0;
-	static double H0 = 0;
-	static double H1 = 0;
-	static double H2 = 0;
-
-	// Update H from E (Dirichlet Boundary Conditions)
-	for (unsigned int i = 0; i < FIELD_DEPTH - 1; ++i) {
-		Hx[i] = Hx[i] + mH*(Ey[i+1] - Ey[i]);
-	}
-	E2 = E1; E1 = E0; E0 = Ey[FIELD_DEPTH-1];
-	Hx[FIELD_DEPTH-1] = Hx[FIELD_DEPTH-1] + mH*(E2 - Ey[FIELD_DEPTH-1]);
-
-	// Update H from E (Dirichlet Boundary Conditions)
-	H2 = H1; H1 = H0; H0 = Hx[0];
-	Ey[0] = Ey[0] + mE*(Hx[0] - H2);
-	for (unsigned int i = 1; i < FIELD_DEPTH - 1; ++i) {
-		Ey[i] = Ey[i] + mE*(Hx[i] - Hx[i-1]);
-	}
-}
-
 void idleCB()
 {
 	static int timeStep = 0;
 	if (timeStep % 100 == 1)
 		std::cout << "Time step " << timeStep << std::endl;
 
-	injectSource(timeStep);
-	simulationStepPerfectReflectionBoundary();
+	sim.injectSource(timeStep);
+	sim.simulationStepPerfectReflectionBoundary();
 	glutPostRedisplay();
 //	usleep(500);
 	timeStep += 1;
@@ -199,21 +107,8 @@ void displayCB()
 
 	glTranslatef(0.0f, 0.0f, 0.0f);
 
-	// Render electric field in red
-	glColor3f(1.0, 0, 0);
-	glBegin(GL_LINE_STRIP);
-	for (unsigned int i = 0; i < FIELD_DEPTH; ++i) {
-		glVertex3f(((float)i/FIELD_DEPTH)*1.9 - 0.95, Ey[i], 0);
-//		glVertex3f(((float)i/FIELD_DEPTH)*1.9 - 0.95, std::sin(i*3.1415*6/FIELD_DEPTH), 0);
-	}
-	glEnd();
-	// Render magnetic field in blue
-	glColor3f(0, 0, 1.0);
-	glBegin(GL_LINE_STRIP);
-	for (unsigned int i = 0; i < FIELD_DEPTH; ++i) {
-		glVertex3f(((float)i/FIELD_DEPTH)*1.9 - 0.95, Hx[i], 0);
-	}
-	glEnd();
+	sim.render();
+
 	glutSwapBuffers();
 }
 
@@ -251,17 +146,17 @@ void setUp(int argc, char **argv)
     setUpCamera();
 }
 
-void initBuffer(std::vector<float> &buf)
-{
-	for (unsigned int i = 0; i < FIELD_HEIGHT; ++i) {
-		for (unsigned int j = 0; j < FIELD_WIDTH; ++j) {
-			buf[3*(FIELD_WIDTH*i + j) + 0] = (sin(j / 1024.0 * 2 * M_PI*5) + 1.0)*0.5;
-			buf[3*(FIELD_WIDTH*i + j) + 1] = (sin(i / 1024.0 * 2 * M_PI*6) + 1.0)*0.5;
-			buf[3*(FIELD_WIDTH*i + j) + 2] = 0;
+// void initBuffer(std::vector<float> &buf)
+// {
+// 	for (unsigned int i = 0; i < FIELD_HEIGHT; ++i) {
+// 		for (unsigned int j = 0; j < FIELD_WIDTH; ++j) {
+// 			buf[3*(FIELD_WIDTH*i + j) + 0] = (sin(j / 1024.0 * 2 * M_PI*5) + 1.0)*0.5;
+// 			buf[3*(FIELD_WIDTH*i + j) + 1] = (sin(i / 1024.0 * 2 * M_PI*6) + 1.0)*0.5;
+// 			buf[3*(FIELD_WIDTH*i + j) + 2] = 0;
 
-		}
-	}
-}
+// 		}
+// 	}
+// }
 
 int main(int argc, char **argv)
 {
@@ -272,7 +167,7 @@ int main(int argc, char **argv)
 	// std::vector<float> imgBuf(1024*1024*3);
 	// initBuffer(imgBuf);
 	// loadTexture(&imgBuf[0]);
-	precomputeSources();
+	sim.precomputeSources();
     glutMainLoop();
     return 0;
 }
