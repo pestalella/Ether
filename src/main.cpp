@@ -128,15 +128,14 @@ void injectSource(unsigned int timeStep)
 	//Hx[FIELD_DEPTH/2] += gaussianSource[timeStep % SOURCE_STEPS];
 }
 
+//	static const double epsilon_0 = 8.8541878188E-12; // Vacuum permitivity
+//	static const double mu_0 = 1.25663706127E-6;  // Vacuum permeability
+static const double c = 299792458;  // speed of light
+static const double mE = c*timeStepLenInSeconds/gridCellWidth;
+static const double mH = c*timeStepLenInSeconds/gridCellWidth;
+
 void simulationStepPerfectReflectionBoundary()
 {
-	static const double epsilon_0 = 8.8541878188E-12; // Vacuum permitivity
-	static const double mu_0 = 1.25663706127E-6;  // Vacuum permeability
-	static const double c = 299792458;  // speed of light
-
-	static const double mE = c*timeStepLenInSeconds/gridCellWidth;
-	static const double mH = c*timeStepLenInSeconds/gridCellWidth;
-
 	// Update H from E (Dirichlet Boundary Conditions)
 	for (unsigned int i = 0; i < FIELD_DEPTH - 1; ++i) {
 		Hx[i] = Hx[i] + mH*(Ey[i+1] - Ey[i]);
@@ -153,13 +152,6 @@ void simulationStepPerfectReflectionBoundary()
 
 void simulationStepPerfectAbsortionBoundary()
 {
-	static const double epsilon_0 = 8.8541878188E-12; // Vacuum permitivity
-	static const double mu_0 = 1.25663706127E-6;  // Vacuum permeability
-	static const double c = 299792458;  // speed of light
-
-	static const double mE = c*timeStepLenInSeconds/gridCellWidth;
-	static const double mH = c*timeStepLenInSeconds/gridCellWidth;
-
 	static double E0 = 0;
 	static double E1 = 0;
 	static double E2 = 0;
