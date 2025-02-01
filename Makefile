@@ -1,11 +1,13 @@
 WRKDIR = `pwd`
 
+CXX = clang++
 LIBS = -lglut -lGLU -lGL -lm
 SRC_DIR = src
 SRC_FILES = $(wildcard $(SRC_DIR)/*.cpp)
 BINARY_NAME = ether
 DBG_OBJDIR = debug_build
 REL_OBJDIR = release_build
+BASE_CXXFLAGS = -Wall -Werror -Wextra -std=c++17
 
 vpath %.cpp $(SRC_DIR)
 
@@ -13,14 +15,14 @@ vpath %.cpp $(SRC_DIR)
 
 all: debug
 
-DBG_CXXFLAGS += -Wall -Werror -W -g3
+DBG_CXXFLAGS += $(BASE_CXXFLAGS) -g3
 DBG_LDFLAGS += -g3
 DBG_BINARY = $(DBG_OBJDIR)/$(BINARY_NAME)
 DBG_DEPS = $(patsubst $(SRC_DIR)/%.cpp,$(DBG_OBJDIR)/%.d,$(SRC_FILES))
 DBG_OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(DBG_OBJDIR)/%.o,$(SRC_FILES))
 debug: prepare $(DBG_BINARY)
 
-REL_CXXFLAGS += -Wall -Werror -Wextra -O3
+REL_CXXFLAGS += $(BASE_CXXFLAGS) -O3
 REL_LDFLAGS =
 REL_OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(REL_OBJDIR)/%.o,$(SRC_FILES))
 REL_BINARY = $(REL_OBJDIR)/$(BINARY_NAME)
@@ -49,9 +51,6 @@ $(REL_BINARY): $(REL_OBJS)
 #This is the rule for creating the dependency files
 $(DBG_OBJDIR)/%.d: %.cpp | $(DBG_OBJDIR)
 	$(CXX) $(DBG_CXXFLAGS) -MM -MT '$(patsubst $(SRC_DIR)/%.cpp,$(DBG_OBJDIR)/%.o,$<)' $< -MF $@
-# src/%.d: src/%.cpp
-#     $(CXX) $(CXXFLAGS) -MM -MT '$(patsubst src/%.cpp,obj/%.o,$<)' $< -MF $@
-
 
 clean:
 	rm -f $(OBJS) $(OUT_BINARY)

@@ -1,9 +1,9 @@
 #include "simulation.h"
+
 #include <glm/glm.hpp>
 #include <GL/glut.h>
 
 #include <iostream>
-#include <vector>
 #include <unistd.h>
 
 GLsizei screenWidth = 1024;
@@ -12,6 +12,7 @@ GLsizei screenHeight = 1024;
 GLuint textureID;
 
 Simulation sim;
+bool simulationRunning = false;
 
 /**
  * initialize OpenGL
@@ -72,6 +73,8 @@ void keyboardCB(unsigned char key, int, int)
 		case 27:  // ESC key
 			exit(0);
             break;
+		case ' ':   // Spacebar: start/stop sim
+			simulationRunning = !simulationRunning;
     }
 }
 
@@ -84,16 +87,13 @@ void reshapeCB(int width, int height)
 
 void idleCB()
 {
-	static int timeStep = 0;
-	if (timeStep % 100 == 1)
-		std::cout << "Time step " << timeStep << std::endl;
-
-	sim.injectSource(timeStep);
-	sim.simulationStepPerfectReflectionBoundary();
-	glutPostRedisplay();
-//	usleep(500);
-	timeStep += 1;
-
+	static int stepCount = 0;
+	if (simulationRunning) {
+		sim.doStep();
+		stepCount += 1;
+		if (stepCount % 5 == 0)
+			glutPostRedisplay();
+	}
 }
 
 void displayCB()
