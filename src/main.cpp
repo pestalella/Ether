@@ -87,7 +87,13 @@ void reshapeCB(int width, int height)
 
 void idleCB()
 {
-	static int stepCount = 0;
+	static constexpr unsigned int NUM_SIMULATION_STEPS = 20000;
+
+	static unsigned int stepCount = 0;
+
+	if (stepCount >= NUM_SIMULATION_STEPS) {
+		simulationRunning = false;
+	}
 	if (simulationRunning) {
 		sim.doStep();
 		stepCount += 1;
